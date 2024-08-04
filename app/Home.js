@@ -135,7 +135,7 @@ export default function Home() {
           maxWidth: '800px', // Align with inventory list width
         }}
       >
-        <Typography variant="h6" noWrap>{userName}'s Pantry</Typography>
+        <Typography variant="h6" noWrap>{userName}&apos;s Pantry</Typography>
         <Button
           variant="contained"
           size="small"

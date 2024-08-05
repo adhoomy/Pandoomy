@@ -3,7 +3,7 @@ import { auth, firestore } from './firebase';
 import { collection, query, getDocs, setDoc, deleteDoc, doc, getDoc, where } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { Box, Typography, Modal, Stack, TextField, Button, Grid } from '@mui/material';
-import { v4 as uuidv4 } from 'uuid'; // Import uuid for generating unique IDs
+import { v4 as uuidv4 } from 'uuid';
 
 export default function Home() {
   const [inventory, setInventory] = useState([]);
@@ -26,7 +26,7 @@ export default function Home() {
         } else {
           console.error('No such document!');
         }
-        updateInventory(currentUser.uid);
+        await updateInventory(currentUser.uid);
       } else {
         setUser(null);
         setInventory([]);
@@ -35,56 +35,71 @@ export default function Home() {
   }, []);
 
   const updateInventory = async (userId) => {
-    const snapshot = query(collection(firestore, 'inventory'), where('userId', '==', userId));
-    const docs = await getDocs(snapshot);
-    const inventoryList = [];
-    docs.forEach((doc) => {
-      inventoryList.push({
-        id: doc.id,
-        ...doc.data(),
+    try {
+      const snapshot = query(collection(firestore, 'inventory'), where('userId', '==', userId));
+      const docs = await getDocs(snapshot);
+      const inventoryList = [];
+      docs.forEach((doc) => {
+        inventoryList.push({
+          id: doc.id,
+          ...doc.data(),
+        });
       });
-    });
-    setInventory(inventoryList);
-    setFilteredInventory(inventoryList);
+      setInventory(inventoryList);
+      setFilteredInventory(inventoryList);
+      console.log('Inventory updated:', inventoryList);
+    } catch (error) {
+      console.error('Error updating inventory:', error);
+    }
   };
 
   const addItem = async (item, quantity) => {
     if (!item) return;
-    const docRef = doc(collection(firestore, 'inventory'), item);
-    const docSnap = await getDoc(docRef);
-
-    if (docSnap.exists()) {
-      const { quantity: existingQuantity, userId } = docSnap.data();
-      if (userId === user.uid) {
-        await setDoc(docRef, { name: item, quantity: existingQuantity + quantity, userId: user.uid });
+    const itemId = uuidv4();
+    const docRef = doc(collection(firestore, 'inventory'), itemId);
+    try {
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const { quantity: existingQuantity, userId } = docSnap.data();
+        if (userId === user.uid) {
+          await setDoc(docRef, { name: item, quantity: existingQuantity + quantity, userId: user.uid }, { merge: true });
+        }
+      } else {
+        await setDoc(docRef, { name: item, quantity: quantity, userId: user.uid });
       }
-    } else {
-      await setDoc(docRef, { name: item, quantity: quantity, userId: user.uid });
+      console.log('Item added:', { name: item, quantity: quantity, userId: user.uid });
+      await updateInventory(user.uid);
+    } catch (error) {
+      console.error('Error adding item:', error);
     }
-
-    await updateInventory(user.uid);
   };
 
   const removeItem = async (itemId) => {
     const docRef = doc(collection(firestore, 'inventory'), itemId);
-    const docSnap = await getDoc(docRef);
-
-    if (docSnap.exists()) {
-      const { quantity } = docSnap.data();
-      if (quantity === 1) {
-        await deleteDoc(docRef);
-      } else {
-        await setDoc(docRef, { ...docSnap.data(), quantity: quantity - 1 });
+    try {
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const { quantity } = docSnap.data();
+        if (quantity === 1) {
+          await deleteDoc(docRef);
+        } else {
+          await setDoc(docRef, { ...docSnap.data(), quantity: quantity - 1 });
+        }
       }
+      await updateInventory(user.uid);
+    } catch (error) {
+      console.error('Error removing item:', error);
     }
-
-    await updateInventory(user.uid);
   };
 
   const removeAllItems = async (itemId) => {
     const docRef = doc(collection(firestore, 'inventory'), itemId);
-    await deleteDoc(docRef);
-    await updateInventory(user.uid);
+    try {
+      await deleteDoc(docRef);
+      await updateInventory(user.uid);
+    } catch (error) {
+      console.error('Error removing all items:', error);
+    }
   };
 
   const handleOpen = () => setOpen(true);
